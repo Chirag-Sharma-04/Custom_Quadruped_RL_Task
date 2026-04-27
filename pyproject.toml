@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "doggo_tasks"
+version = "0.1.0"
+description = "Isaac Lab tasks for the Doggo quadruped (flat-velocity locomotion)."
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+include = ["doggo_tasks*"]
+
+[tool.setuptools.package-data]
+"doggo_tasks" = ["assets/*.usd"]
