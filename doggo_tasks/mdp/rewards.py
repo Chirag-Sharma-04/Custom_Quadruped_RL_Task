@@ -13,7 +13,7 @@ import torch
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils.math import quat_rotate_inverse
+from isaaclab.utils.math import quat_apply_inverse
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -65,7 +65,7 @@ def feet_lateral_distance_penalty(
     num_feet = foot_rel_w.shape[1]
     quat_b = root_quat_w.unsqueeze(1).expand(-1, num_feet, -1).reshape(-1, 4)
     vec_b = foot_rel_w.reshape(-1, 3)
-    foot_pos_b = quat_rotate_inverse(quat_b, vec_b).reshape(-1, num_feet, 3)
+    foot_pos_b = quat_apply_inverse(quat_b, vec_b).reshape(-1, num_feet, 3)
 
     # Lateral distance from the *physical* sagittal plane: subtract the
     # link-origin-to-CoM offset so the penalty is symmetric about the true
