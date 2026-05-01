@@ -11,3 +11,4 @@ doggo_tasks/agents/__init__.py
 doggo_tasks/agents/rsl_rl_ppo_cfg.py
 doggo_tasks/assets/doggo_v2.usd
 doggo_tasks/mdp/__init__.py
+doggo_tasks/mdp/rewards.py

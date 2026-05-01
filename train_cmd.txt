@@ -1,0 +1,4 @@
+conda activate isaac-lab
+
+cd ~/IsaacLab && ./isaaclab.sh -p ~/IsaacLab/doggo_isaac_lab_task/scripts/train.py --task Isaac-Velocity-Flat-Doggo-v0 --headless --num_envs 4096 --video --video_length 250 --video_interval 5000 --max_iterations 10000 --resume --load_run 2026-04-27_18-37-39 --checkpoint model_8100.pt 
+
