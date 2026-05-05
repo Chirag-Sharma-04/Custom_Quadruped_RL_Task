@@ -1,17 +1,15 @@
 """Doggo flat-velocity locomotion environment.
 
 Modeled on isaaclab_tasks.manager_based.locomotion.velocity.config.spot.flat_env_cfg
-with three doggo-specific differences:
+with doggo-specific differences:
   1. Scene robot is DOGGO_CFG, not SPOT_CFG.
   2. Self-collisions disabled (doggo's adjacent-link colliders aren't filtered).
   3. Init height tuned to doggo's leg length (~0.65 m vs Spot's 0.5 m).
-
-Everything else (rewards, terminations, randomization, terrain, viewer)
-matches Spot Flat exactly so we benefit from the same well-tuned setup.
+  4. Direct foot-spacing reward discourages the criss-cross gait failure mode.
+  5. Stage-1 training is flat-first with gentler randomization.
 """
 
 import isaaclab.sim as sim_utils
-import isaaclab.terrains as terrain_gen
 from isaaclab.envs import ViewerCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
@@ -20,7 +18,6 @@ from isaaclab.managers import RewardTermCfg, SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
-from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp
@@ -28,26 +25,6 @@ from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import Lo
 
 from . import mdp as doggo_mdp
 from .doggo_cfg import DOGGO_CFG
-
-
-COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
-    size=(8.0, 8.0),
-    border_width=20.0,
-    num_rows=9,
-    num_cols=21,
-    horizontal_scale=0.1,
-    vertical_scale=0.005,
-    slope_threshold=0.75,
-    difficulty_range=(0.0, 1.0),
-    use_cache=False,
-    sub_terrains={
-        "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.2),
-        "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=0.2, noise_range=(0.02, 0.05), noise_step=0.02, border_width=0.25
-        ),
-    },
-)
-
 
 @configclass
 class DoggoActionsCfg:
@@ -62,7 +39,7 @@ class DoggoCommandsCfg:
         rel_standing_envs=0.1,
         rel_heading_envs=0.0,
         heading_command=False,
-        debug_vis=True,
+        debug_vis=False,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
             lin_vel_x=(-2.0, 3.0), lin_vel_y=(-1.5, 1.5), ang_vel_z=(-2.0, 2.0)
         ),
@@ -111,8 +88,8 @@ class DoggoEventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.3, 1.0),
-            "dynamic_friction_range": (0.3, 0.8),
+            "static_friction_range": (0.8, 1.2),
+            "dynamic_friction_range": (0.7, 1.1),
             "restitution_range": (0.0, 0.0),
             "num_buckets": 64,
         },
@@ -123,7 +100,7 @@ class DoggoEventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="body"),
-            "mass_distribution_params": (-2.5, 2.5),
+            "mass_distribution_params": (-0.5, 0.5),
             "operation": "add",
         },
     )
@@ -168,10 +145,10 @@ class DoggoEventCfg:
     push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(10.0, 15.0),
+        interval_range_s=(15.0, 20.0),
         params={
             "asset_cfg": SceneEntityCfg("robot"),
-            "velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)},
+            "velocity_range": {"x": (-0.1, 0.1), "y": (-0.1, 0.1)},
         },
     )
 
@@ -249,7 +226,7 @@ class DoggoRewardsCfg:
     # Catches the criss-cross failure mode regardless of which joint(s) cause it.
     feet_lateral_distance = RewardTermCfg(
         func=doggo_mdp.feet_lateral_distance_penalty,
-        weight=-50.0,
+        weight=-25.0,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
             "threshold": 0.08,
@@ -264,34 +241,11 @@ class DoggoRewardsCfg:
         weight=-1.0e-4,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*_h[xy]")},
     )
-    # hx (hip abduction) gets a strong penalty with no stand-still boost so the
-    # policy is pushed to keep the wider init stance during locomotion — fixes
-    # the criss-crossed-feet local minimum.
-    joint_pos_hx = RewardTermCfg(
-        func=doggo_mdp.joint_position_penalty,
-        weight=-2.0,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=".*_hx"),
-            "stand_still_scale": 1.0,
-            "velocity_threshold": 0.5,
-        },
-    )
-    # Knee penalty: discourage knee compensation that brings the lower leg
-    # inward across the centerline (visually re-creates the criss-cross).
-    joint_pos_kn = RewardTermCfg(
-        func=doggo_mdp.joint_position_penalty,
-        weight=-1.0,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=".*_kn"),
-            "stand_still_scale": 1.0,
-            "velocity_threshold": 0.5,
-        },
-    )
     joint_pos = RewardTermCfg(
         func=doggo_mdp.joint_position_penalty,
         weight=-0.7,
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=".*_hy"),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
             "stand_still_scale": 5.0,
             "velocity_threshold": 0.5,
         },
@@ -335,7 +289,13 @@ class DoggoFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
     terminations: DoggoTerminationsCfg = DoggoTerminationsCfg()
     events: DoggoEventCfg = DoggoEventCfg()
 
-    viewer = ViewerCfg(eye=(10.5, 10.5, 0.3), origin_type="world", env_index=0, asset_name="robot")
+    viewer = ViewerCfg(
+        eye=(3.0, 3.0, 1.5),
+        lookat=(0.0, 0.0, 0.3),
+        origin_type="asset_root",
+        env_index=0,
+        asset_name="robot",
+    )
 
     def __post_init__(self):
         super().__post_init__()
@@ -354,12 +314,13 @@ class DoggoFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # Swap robot in.
         self.scene.robot = DOGGO_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
-        # Terrain — same Spot cobblestone/flat mix.
+        # Stage-1 terrain: true plane with grid origins so each env trains separately.
         self.scene.terrain = TerrainImporterCfg(
             prim_path="/World/ground",
-            terrain_type="generator",
-            terrain_generator=COBBLESTONE_ROAD_CFG,
-            max_init_terrain_level=COBBLESTONE_ROAD_CFG.num_rows - 1,
+            terrain_type="plane",
+            terrain_generator=None,
+            env_spacing=self.scene.env_spacing,
+            max_init_terrain_level=None,
             collision_group=-1,
             physics_material=sim_utils.RigidBodyMaterialCfg(
                 friction_combine_mode="multiply",
@@ -367,16 +328,13 @@ class DoggoFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
                 static_friction=1.0,
                 dynamic_friction=1.0,
             ),
-            visual_material=sim_utils.MdlFileCfg(
-                mdl_path=f"{ISAACLAB_NUCLEUS_DIR}/Materials/TilesMarbleSpiderWhiteBrickBondHoned/TilesMarbleSpiderWhiteBrickBondHoned.mdl",
-                project_uvw=True,
-                texture_scale=(0.25, 0.25),
-            ),
-            debug_vis=True,
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.65, 0.65, 0.65)),
+            debug_vis=False,
         )
 
         # No height-scan in flat env.
         self.scene.height_scanner = None
+        self.curriculum.terrain_levels = None
 
 
 class DoggoFlatEnvCfg_PLAY(DoggoFlatEnvCfg):
@@ -387,11 +345,6 @@ class DoggoFlatEnvCfg_PLAY(DoggoFlatEnvCfg):
         self.scene.num_envs = 50
         self.scene.env_spacing = 2.5
         self.scene.terrain.max_init_terrain_level = None
-
-        if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 5
-            self.scene.terrain.terrain_generator.num_cols = 5
-            self.scene.terrain.terrain_generator.curriculum = False
 
         # Disable observation noise during play.
         self.observations.policy.enable_corruption = False
