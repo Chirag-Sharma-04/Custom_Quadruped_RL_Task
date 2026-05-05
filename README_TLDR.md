@@ -34,6 +34,9 @@ Main understanding:
 - Current conclusion: the flat-ground stage-1 training worked very well numerically. Next decision should be based on video/playback quality, especially whether criss-cross is gone.
 - Playback FPS around 10 with both 1 and 50 robots likely points to viewport/rendering/system power state, not policy/physics. Try performance rendering mode and check CPU/GPU power state.
 - Live check during play showed GPU around `51%`, Isaac Sim Python around `139%` CPU, and CPU governor still `powersave`; likely main/render-thread or frame-pacing bottleneck rather than GPU saturation.
+- Startup/drop recovery is possible to train, but it should be treated as a separate robustness stage. For deployment, prefer spawning in the training pose, holding default joint targets briefly, starting the policy at zero command, then ramping commands. Do not assume the current walking policy can recover from an uncontrolled passive fall.
+- For Isaac Sim startup, "hold commands are ready" means valid default joint position targets are already being published/held when physics starts. Setting joint positions once is not enough if drives/ROS commands then go to zero or disappear.
+- No new training is recommended until `model_9999.pt` is visually tested. The previous run already trained velocity commands in x, y, and yaw, so it should handle forward/backward, sideways, turning, and combined flat-ground commands within its trained ranges.
 
 Best checkpoints to compare:
 

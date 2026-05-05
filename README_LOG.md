@@ -486,3 +486,56 @@ Observed:
 Interpretation:
 
 The 10 FPS playback issue is probably not raw GPU saturation and not policy inference. It looks like frame pacing, viewport/render-thread bottleneck, CPU power policy, display/compositor overhead, or Isaac Sim GUI overhead. Low global CPU usage can still hide a single-thread/render-thread bottleneck.
+
+## 2026-05-05 17:36:11 IST +0530
+
+### Startup/Drop Recovery Training Decision
+
+The user asked whether the policy can be fine-tuned or retrained to handle a deployment startup where the robot is first spawned above the ground, falls down, and only then the policy starts.
+
+Interpretation:
+
+- This is possible, but it is a different objective from the clean flat-ground trot that was just trained.
+- The current stage-1 policy was trained with the controller active immediately from reset, and body/contact events are still treated as failure/termination conditions.
+- Therefore, it should not be assumed that the current policy can recover from an arbitrary passive drop or fallen/body-contact state.
+- For practical Isaac Sim deployment, the safer first approach is to avoid the passive uncontrolled fall: spawn at the training pose, hold default joint targets briefly, start the policy with zero command, then ramp the walking command.
+- If recovery behavior is required later, train it as a separate robustness/startup stage or separate recovery policy using the current good checkpoint as the baseline. Do not overwrite the strong flat-walking baseline blindly.
+
+Recommended direction:
+
+1. Preserve/export the current best flat-walking checkpoint.
+2. For normal scenes, use deployment startup logic: spawn, apply/hold default joint pose, let the robot settle, start policy, ramp commands.
+3. Only if passive-drop startup is mandatory, create a new fine-tune experiment that randomizes initial height/orientation/joint pose/velocities or uses dropped-state resets. For true fallen recovery, also adjust body-contact termination and add stand-up/recovery rewards, ideally in a separate stage from locomotion.
+
+## 2026-05-05 18:32:41 IST +0530
+
+### Isaac Sim Startup Clarification
+
+Clarified deployment startup language:
+
+- "Policy/hold commands are ready" means Isaac Sim should receive valid joint position targets at the moment physics starts.
+- Setting the robot's joint positions once before pressing Play is not enough if the joint drives/ROS bridge then command zeros or no command.
+- The safest startup is to publish/hold the training default joint targets while the simulation starts, use zero velocity command, then switch/ramp into normal policy walking after the robot has valid joint state/IMU/odom feedback.
+- If the policy node cannot compute an action until Isaac Sim publishes the first observations, either the policy node should publish default joint targets during startup, or a small hold-pose node/action graph should do it until the policy takes over.
+
+## 2026-05-05 19:04:37 IST +0530
+
+### Training Plan Decision
+
+Current recommendation: do not start another training run immediately. The fresh flat-ground checkpoint `2026-05-04_18-25-16/model_9999.pt` is numerically strong enough that the next step should be visual/playback validation and deployment-interface testing.
+
+Train again only if a specific failure is observed:
+
+- criss-cross gait remains visible,
+- robot falls or body-contacts during normal flat walking,
+- command tracking is poor in important directions,
+- Isaac Sim startup from held default pose is unreliable,
+- rough terrain or passive-drop recovery becomes mandatory.
+
+The previous run was trained with full planar velocity commands, not only forward walking:
+
+- `lin_vel_x=(-2.0, 3.0)`
+- `lin_vel_y=(-1.5, 1.5)`
+- `ang_vel_z=(-2.0, 2.0)`
+
+Therefore the policy should have learned forward/backward, lateral, turning, and combined velocity tracking on flat ground, though actual quality still needs visual validation.
