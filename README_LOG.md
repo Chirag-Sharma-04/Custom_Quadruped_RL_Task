@@ -452,3 +452,37 @@ TensorBoard scalar check:
 Interpretation:
 
 This is numerically the best run so far. It exceeds the old high-reward run and has much lower body-contact termination than the second full-constraint anti-crossing run. The stage-1 changes worked for flat-ground learning. However, this only proves flat-ground performance; it does not prove rough-terrain behavior or final Isaac Sim ROS 2 deployment behavior. The next required check is visual playback/video review for gait quality and criss-cross absence.
+
+## 2026-05-05 12:51:02 IST +0530
+
+### Playback FPS Note
+
+The user reported only about 10 FPS in play mode with either 1 robot or 50 robots on an RTX Pro 4000 Blackwell.
+
+Interpretation:
+
+- Since 1 and 50 robots give similar FPS, the bottleneck is likely viewport/rendering/system state, not robot physics or policy inference.
+- The completed headless training run achieved high simulation throughput, so the RL task itself is not fundamentally slow.
+- The local machine currently reports CPU governor `powersave`; Isaac Sim also warned about CPU performance profile during earlier runs.
+- Recommended checks: run play without `--video`/`--enable_cameras`, try `--rendering_mode performance`, ensure Isaac Sim is using the NVIDIA GPU, monitor GPU utilization while playing, and switch CPU power profile/governor to performance if possible.
+
+## 2026-05-05 12:58:08 IST +0530
+
+### Playback Performance Check
+
+Checked the live play process outside the sandbox.
+
+Observed:
+
+- Command running: `scripts/play.py --task Isaac-Velocity-Flat-Doggo-Play-v0 --num_envs 1 --checkpoint .../model_9999.pt --rendering_mode performance`
+- GPU: RTX Pro 4000 Blackwell Generation Laptop GPU
+- GPU utilization: about `51%`
+- GPU process: Isaac Lab/Isaac Sim Python using about `45%` SM in `nvidia-smi pmon`
+- GPU memory used: about `7.1GB / 16.3GB`
+- GPU pstate: `P1`
+- Isaac Sim Python CPU usage: about `139%`, so roughly 1.4 CPU cores
+- CPU governor: `powersave`
+
+Interpretation:
+
+The 10 FPS playback issue is probably not raw GPU saturation and not policy inference. It looks like frame pacing, viewport/render-thread bottleneck, CPU power policy, display/compositor overhead, or Isaac Sim GUI overhead. Low global CPU usage can still hide a single-thread/render-thread bottleneck.

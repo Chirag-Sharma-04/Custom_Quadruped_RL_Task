@@ -32,6 +32,8 @@ Main understanding:
 - `train_cmd.txt` records 3-second videos every 500 training iterations: `--video_length 150 --video_interval 12000`.
 - Fresh stage-1 run `2026-05-04_18-25-16` completed 10k iterations. Final reward was `366.27`, peak reward was `382.92`, final episode length was `961.23`, body contact was about `5.4%`, timeout was about `94.6%`, and terrain out-of-bounds was `0`.
 - Current conclusion: the flat-ground stage-1 training worked very well numerically. Next decision should be based on video/playback quality, especially whether criss-cross is gone.
+- Playback FPS around 10 with both 1 and 50 robots likely points to viewport/rendering/system power state, not policy/physics. Try performance rendering mode and check CPU/GPU power state.
+- Live check during play showed GPU around `51%`, Isaac Sim Python around `139%` CPU, and CPU governor still `powersave`; likely main/render-thread or frame-pacing bottleneck rather than GPU saturation.
 
 Best checkpoints to compare:
 
